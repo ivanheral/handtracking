@@ -1,0 +1,20 @@
+# Entorno virtual
+venv/
+env/
+.env
+
+# Modelos pesados (Evita errores de GitHub 100MB)
+*.onnx
+*.task
+*.pb
+*.h5
+
+# Archivos de usuario/temporales
+objetivo.jpg
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+
+# Directorios de NVIDIA si se copiaron localmente
+nvidia/

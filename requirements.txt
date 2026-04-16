@@ -3,7 +3,3 @@ insightface
 onnxruntime-gpu
 mediapipe
 numpy
-nvidia-cuda-runtime-cu12
-nvidia-cudnn-cu12
-nvidia-cublas-cu12
-nvidia-curand-cu12

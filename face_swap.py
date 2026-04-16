@@ -5,95 +5,108 @@ import os
 import signal
 import insightface
 from insightface.app import FaceAnalysis
+import numpy as np
 
 def main():
-    # Asegúrate de colocar en esta misma carpeta una foto JPEG con la cara que vas a suplantar, 
-    # y renómbrala a "objetivo.jpg"
+    # El archivo de imagen objetivo y el modelo deben estar en la misma carpeta
     target_image_path = 'objetivo.jpg'
     model_path = 'inswapper_128.onnx'
     
     if not os.path.exists(target_image_path):
-        print(f"[ERROR] No se ha encontrado la imagen '{target_image_path}'. Coloca una foto con tu cara objetivo en esta carpeta.")
+        print(f"[ERROR] No se ha encontrado la imagen '{target_image_path}'.")
         sys.exit(1)
         
     if not os.path.exists(model_path):
         print(f"[ERROR] No se ha encontrado el modelo '{model_path}'.")
-        print("Puedes descargarlo ejecutando: wget -O inswapper_128.onnx https://huggingface.co/ezioruan/inswapper_128.onnx/resolve/main/inswapper_128.onnx")
         sys.exit(1)
 
-    print("Cargando los modelos de IA... Esto puede tardar unos segundos.")
+    print("Cargando los modelos de IA... Usando NVIDIA RTX GPU.")
     
-    # Proveedores de aceleración. Si no tienes NVIDIA (CUDA), usará la CPU automáticamente de forma muy pesada (y lenta).
-    providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+    # Prioridad: TensorRT -> CUDA -> CPU
+    providers = ['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider']
 
-    # 1. Analizador facial: RetinaFace + detección de keypoints geométricos
+    # 1. Analizador facial: Buffalo_L para mayor precisión
     face_analyzer = FaceAnalysis(name='buffalo_l', providers=providers)
     face_analyzer.prepare(ctx_id=0, det_size=(640, 640))
 
     # 2. Motor generativo InSwapper
     swapper = insightface.model_zoo.get_model(model_path, providers=providers)
 
-    # 3. Extraer Embedding de la cara que queremos colocar sobre nosotros
-    print(f"Analizando identidad de la imagen objetivo: {target_image_path}...")
+    # 3. Extraer Embedding de la cara objetivo
+    print(f"Analizando cara de: {target_image_path}...")
     target_img = cv2.imread(target_image_path)
     target_faces = face_analyzer.get(target_img)
     
     if len(target_faces) == 0:
-        print("[ERROR] No se ha encontrado ninguna cara clara en la foto objetivo.")
+        print("[ERROR] No se detectó ninguna cara en 'objetivo.jpg'. Asegúrate de que la cara sea visible.")
         sys.exit(1)
         
-    target_identity = target_faces[0] # Tomamos la primera cara detectada
+    target_identity = target_faces[0]
 
-    # 4. Iniciar Bucle Webcam
+    # 4. Iniciar Webcam con reintento
     cap = cv2.VideoCapture(0)
-    
-    def cleanup_and_exit(sig, frame):
+    if not cap.isOpened():
+        print("[AVISO] Intentando abrir la cámara de nuevo...")
+        time.sleep(1)
+        cap = cv2.VideoCapture(0)
+        
+    if not cap.isOpened():
+        print("[ERROR] No se pudo acceder a la webcam.")
+        sys.exit(1)
+
+    def cleanup(sig, frame):
         if cap.isOpened(): cap.release()
         cv2.destroyAllWindows()
+        print("\n[INFO] Aplicación cerrada correctamente.")
         sys.exit(0)
 
-    signal.signal(signal.SIGINT, cleanup_and_exit)
-    signal.signal(signal.SIGTSTP, cleanup_and_exit)
+    # Capturar señales de cierre
+    signal.signal(signal.SIGINT, cleanup)
 
-    cv2.namedWindow("Real-time Face Swap", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Real-time Face Swap", 1024, 768)
-
-    print("¡Sistema listo! Mostrando cámara...")
+    cv2.namedWindow("Poder NVIDIA: Face Swap", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Poder NVIDIA: Face Swap", 1024, 768)
+    
+    print("¡Sistema listo! Presiona 'Q' en la ventana para salir.")
 
     t_prev = time.time()
     
-    while cap.isOpened():
+    while True:
         ret, frame = cap.read()
         if not ret: break
 
         frame = cv2.flip(frame, 1)
 
-        # Buscar mi cara real en la cámara en este exacto milisegundo
+        # Buscar caras en el frame actual
         my_faces = face_analyzer.get(frame)
         
-        # Si encuentra al menos una cara mía
         if my_faces:
-            my_identity = my_faces[0]
+            # Ordenar por tamaño de caja (procesar solo la cara más grande/cercana)
+            my_faces.sort(key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)
             
-            # Ejecutar inyección de Pixeles Generativos
             try:
-                frame = swapper.get(frame, my_identity, target_identity, paste_back=True)
+                # Aplicar el Swap sobre la cara real
+                frame = swapper.get(frame, my_faces[0], target_identity, paste_back=True)
             except Exception as e:
-                print(f"Error al intentar aplicar el Swap: {e}")
+                # Silenciar errores menores de inferencia
+                pass
         
-        # Calcular los FPS (en CPU serán muy bajos, el deepfake es costoso)
+        # Calcular FPS
         t_curr = time.time()
-        fps = int(1/(t_curr-t_prev) if t_curr - t_prev > 0 else 0)
+        fps = 1/(t_curr-t_prev) if t_curr - t_prev > 0 else 0
         t_prev = t_curr
         
-        # UI
-        text_color = (0, 255, 255) if fps > 10 else (0, 0, 255)
-        cv2.putText(frame, f"FPS: {fps} (Usa GPU para mejorar)", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.2, text_color, 2)
+        # Overlay estético
+        cv2.rectangle(frame, (10, 10), (280, 70), (0, 0, 0), -1)
+        cv2.putText(frame, f"FPS: {fps:.1f}", (20, 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 127), 2)
         
-        cv2.imshow("Real-time Face Swap", frame)
-        if cv2.waitKey(1) & 0xFF in (27, ord('q')): break
+        cv2.imshow("Poder NVIDIA: Face Swap", frame)
+        
+        # Tecla de salida
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-    cleanup_and_exit(None, None)
+    cleanup(None, None)
 
 if __name__ == "__main__":
     main()
