@@ -68,6 +68,8 @@ def main():
         ('CUDAExecutionProvider', {
             'device_id': 0,
             'arena_extend_strategy': 'kSameAsRequested',
+            'cudnn_conv_algo_search': 'HEURISTIC', # Evita errores de ejecución en algunas GPUs
+            'use_tf32': 0,                        # Desactivar TF32 para mayor estabilidad
         }),
         'CPUExecutionProvider'
     ]
