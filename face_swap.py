@@ -65,16 +65,16 @@ def main():
             sys.exit(1)
 
     # Configuración de aceleración de hardware NVIDIA
-    # TensorRT es la máxima optimización para la serie 50
+    # Priorizamos CUDA por ser más compatible en Windows, dejando TensorRT como secundario.
     providers = [
+        ('CUDAExecutionProvider', {
+            'device_id': 0,
+            'arena_extend_strategy': 'kSameAsRequested',
+        }),
         ('TensorrtExecutionProvider', {
             'device_id': 0,
             'trt_max_workspace_size': 2147483648, # 2GB
             'trt_fp16_enable': True,
-        }),
-        ('CUDAExecutionProvider', {
-            'device_id': 0,
-            'arena_extend_strategy': 'kSameAsRequested',
         }),
         'CPUExecutionProvider'
     ]
