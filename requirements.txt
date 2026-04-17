@@ -1,21 +1,10 @@
-# --- Core Vision ---
-opencv-python>=4.8.0
-mediapipe>=0.10.8
-numpy>=1.24.0
+--extra-index-url https://download.pytorch.org/whl/cu128
 
-# --- InsightFace & Face Swap ---
+# --- Dependencias Principales ---
 insightface>=0.7.3
 onnxruntime-gpu>=1.17.0
 
-# --- NVIDIA GPU Acceleration (Universal Fixes for Windows) ---
-# Instalamos soporte para ambos (11 y 12) para máxima compatibilidad
-nvidia-cuda-runtime-cu11
-nvidia-cudnn-cu11
-nvidia-cublas-cu11
-nvidia-cufft-cu11
-nvidia-curand-cu11
-nvidia-cuda-runtime-cu12
-nvidia-cudnn-cu12
-nvidia-cublas-cu12
-nvidia-cufft-cu12
-nvidia-curand-cu12
+# --- PyTorch CUDA 12.8 (Blackwell RTX 50 Series Fix) ---
+torch
+torchvision
+torchaudio

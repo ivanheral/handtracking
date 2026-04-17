@@ -1,158 +1,145 @@
-import cv2
-import sys
-import time
-import os
-import signal
-import insightface
+import torch, os, cv2, sys, time, insightface
 from insightface.app import FaceAnalysis
 import numpy as np
 
-# Parche de compatibilidad para NVIDIA en Windows (Soluciona DLLs faltantes)
-if os.name == 'nt':
-    import site
-    possible_paths = []
-    # Buscar en el sitio de paquetes del usuario y del venv
-    for s in [site.getusersitepackages()] + site.getsitepackages():
-        nvidia_base = os.path.join(s, 'nvidia')
-        if os.path.exists(nvidia_base):
-            for folder in ['cuda_runtime/bin', 'cublas/bin', 'cudnn/bin', 'curand/bin', 'cufft/bin']:
-                full_path = os.path.join(nvidia_base, folder)
-                if os.path.exists(full_path):
-                    possible_paths.append(full_path)
+class RTXFaceSwap:
+    """Sistema de Face Swap optimizado para arquitecturas NVIDIA RTX Blackwell (Serie 50)."""
     
-    if possible_paths:
-        print(f"[IA] Librerías NVIDIA encontradas: {len(possible_paths)} carpetas añadidas al sistema.")
-        os.environ['PATH'] = os.pathsep.join(possible_paths) + os.pathsep + os.environ['PATH']
-        for path in possible_paths:
-            try: os.add_dll_directory(path)
+    def __init__(self, target_path='objetivo.jpg', model='inswapper_128.onnx'):
+        self._setup_cuda_dlls()
+        
+        # Configuración de Inferencia GPU
+        self.providers = [
+            ('CUDAExecutionProvider', {
+                'device_id': '0', # El número en CUDA tiene que ser texto.
+                'cudnn_conv_algo_search': 'HEURISTIC', # Vital para saltar el bug de convolución en Blackwell
+                'use_tf32': '0'
+            }), 
+            'CPUExecutionProvider'
+        ]
+        
+        print("[IA] Inicializando motores neuronales...")
+        # Cargamos detección, puntos clave y reconocimiento (necesario para el ADN facial)
+        self.analyzer = FaceAnalysis(
+            name='buffalo_l', 
+            providers=self.providers, 
+            allowed_modules=['detection', 'landmark_2d_106', 'recognition']
+        )
+        
+        # Primera pasada en alta resolución para capturar la cara objetivo con precisión
+        self.analyzer.prepare(ctx_id=0, det_size=(640, 640))
+        
+        if not os.path.exists(model):
+            raise FileNotFoundError(f"Modelo {model} no encontrado. Descárgalo de Hugging Face.")
+            
+        self.swapper = insightface.model_zoo.get_model(model, providers=self.providers)
+        
+        # Extraer Identidad Base de la foto original
+        img = cv2.imread(target_path)
+        if img is None: 
+            raise FileNotFoundError(f"No se pudo leer la imagen: {target_path}")
+            
+        faces = self.analyzer.get(img)
+        if not faces: 
+            raise ValueError(f"No se detectó ninguna cara en {target_path}")
+            
+        # Almacenamos el embedding (ADN) de la cara más grande de la foto
+        self.target_id = max(faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]))
+        
+        # Re-ajustamos a baja resolución para el seguimiento de cámara ultra-fluido (FPS)
+        self.analyzer.prepare(ctx_id=0, det_size=(320, 320))
+
+    def _setup_cuda_dlls(self):
+        """Inyecta las librerías CUDA de PyTorch en el sistema para corregir bugs de DLLs de NVIDIA."""
+        t_path = os.path.join(os.path.dirname(torch.__file__), 'lib')
+        if os.path.exists(t_path):
+            os.environ['PATH'] = t_path + os.pathsep + os.environ.get('PATH', '')
+            try: os.add_dll_directory(t_path)
             except: pass
 
-# Configuración Estética (Tech Gold)
-COLOR_TEXTO = (255, 255, 255)
-COLOR_ACCENT = (0, 215, 255) # Dorado
-COLOR_BG = (10, 10, 10)
-
-def main():
-    print(f"{'='*50}")
-    print(" VISION INTELLIGENCE: FACE SWAP CORE v2.0 ")
-    print(" Optimizado para NVIDIA RTX (5070 Ti Ready) ")
-    print(f"{'='*50}")
-
-    target_image_path = 'objetivo.jpg'
-    model_path = 'inswapper_128.onnx'
-    
-    if not os.path.exists(target_image_path):
-        print(f"[ERROR] Imagen '{target_image_path}' no encontrada.")
-        sys.exit(1)
+    def _enhance_face(self, frame, bbox):
+        """
+        Filtro de Post-Producción Cinematográfico.
+        Inyecta un Unsharpen Mask de Alto Rango Dinámico (HDR falso) guiado por las coordenadas
+        puras de la neurona. Devuelve una textura cristalina a la piel "pegada".
+        """
+        x1, y1, x2, y2 = [int(v) for v in bbox]
         
-    if not os.path.exists(model_path):
-        print(f"[AVISO] Modelo '{model_path}' no encontrado.")
-        print("[IA] Iniciando descarga automática desde Hugging Face (aprox. 554MB)...")
-        import urllib.request
-        url = "https://huggingface.co/ezioruan/inswapper_128.onnx/resolve/main/inswapper_128.onnx"
+        # Geometría de seguridad (Evitar crasheos de memoria Out-Of-Bounds por los pelos)
+        y1, y2 = max(0, y1), min(frame.shape[0], y2)
+        x1, x2 = max(0, x1), min(frame.shape[1], x2)
+        
+        region = frame[y1:y2, x1:x2]
+        if region.size == 0: return frame
+        
+        # Unsharpen Mask: Mezclar capa nítida y sustraer una borrosa, forzando los microporos a brillar
+        blur = cv2.GaussianBlur(region, (0, 0), 2.5)
+        sharpened = cv2.addWeighted(region, 1.4, blur, -0.4, 0)
+        
+        frame[y1:y2, x1:x2] = sharpened
+        return frame
+
+    def start(self):
+        """Arranca el bucle de captura y procesamiento en tiempo real."""
+        cap = cv2.VideoCapture(0)
+        # Volvemos a levantar la resolución a HD nativo (1280x720) 
+        # Ahora tu gráfica va suelta y puede comerse este tamaño sin despeinarse.
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        
+        p_time = time.time()
+        frame_counter = 0
+        last_faces = None
+
+        print("[OK] Sistema RTX Vision activo. Pulsa 'Q' para salir.")
+        
         try:
-            def progress(block_num, block_size, total_size):
-                if total_size > 0:
-                    percent = (block_num * block_size * 100) / total_size
-                    sys.stdout.write(f"\r[IA] Progreso de descarga: {percent:.1f}%")
-                    sys.stdout.flush()
-            urllib.request.urlretrieve(url, model_path, progress)
-            print("\n[OK] Modelo descargado y listo.")
-        except Exception as e:
-            print(f"\n[ERROR] No se pudo descargar el modelo: {e}")
-            sys.exit(1)
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret: break
+                
+                frame = cv2.flip(frame, 1) # Espejo
+                
+                # --- MEJORA 4: FRAME SKIPPING (INTERPOLACIÓN) ---
+                # En lugar de usar la GPU entera para redetectar tu cara desde cero
+                # en cada milísegundo, actualizamos la detección 1 de cada 2 frames.
+                # El cerebro humano no nota la inercia, ¡y multiplicamos los FPS!
+                if frame_counter % 2 == 0:
+                    last_faces = self.analyzer.get(frame)
+                
+                frame_counter += 1
 
-    # Configuración de motores en Modo Híbrido (Estabilidad + Velocidad)
-    # 1. Detección (Analyzer): Usamos CPU para evitar los errores de cuDNN de la Serie 50.
-    #    La detección es ligera y no ralentizará el sistema en una CPU moderna.
-    providers_cpu = ['CPUExecutionProvider']
-    
-    # 2. Intercambio (Swapper): Usamos CUDA 100% puro. El pesado.
-    providers_gpu = [
-        ('CUDAExecutionProvider', {
-            'device_id': 0,
-            'arena_extend_strategy': 'kSameAsRequested',
-            'cudnn_conv_algo_search': 'DEFAULT',
-        }),
-        'CPUExecutionProvider'
-    ]
+                # Proceso de Intercambio
+                if last_faces:
+                    # Seleccionamos la cara más dominante en pantalla
+                    current_face = max(last_faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]))
+                    try:
+                        frame = self.swapper.get(frame, current_face, self.target_id, paste_back=True)
+                        # --- MEJORA AUDIOVISUAL: Inyección del Filtro de Fusión ---
+                        frame = self._enhance_face(frame, current_face.bbox)
+                    except:
+                        pass
 
-    print("[IA] Cargando motores en modo HÍBRIDO (Detección: CPU | Swap: GPU)...")
-    try:
-        # Analizador en CPU para evitar el error 'CUDNN_BACKEND_API_FAILED'
-        face_analyzer = FaceAnalysis(name='buffalo_l', providers=providers_cpu)
-        face_analyzer.prepare(ctx_id=0, det_size=(640, 640))
-        
-        # Swapper en GPU para máxima fluidez de 60 FPS
-        swapper = insightface.model_zoo.get_model(model_path, providers=providers_gpu)
-        print("[IA] Motores sincronizados. RTX activado para el generador.")
-    except Exception as e:
-        print(f"[ERROR] Error al inicializar híbrido: {e}")
-        return
-
-    # Proceso de identidad objetivo
-    print(f"[IA] Sincronizando identidad: {target_image_path}...")
-    target_img = cv2.imread(target_image_path)
-    target_faces = face_analyzer.get(target_img)
-    
-    if not target_faces:
-        print("[ERROR] No se detectó rostro en la imagen objetivo.")
-        sys.exit(1)
-    
-    target_identity = sorted(target_faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)[0]
-    print("[IA] Identidad inyectada con éxito. RTX ON.")
-
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    
-    def clean(*_): 
-        cap.release()
-        cv2.destroyAllWindows()
-        print("\n[INFO] Desconectando redes neuronales. Sistema OFF.")
-        sys.exit(0)
-
-    signals = [signal.SIGINT]
-    if hasattr(signal, "SIGTSTP"): signals.append(signal.SIGTSTP)
-    for sig in signals: signal.signal(sig, clean)
-
-    cv2.namedWindow("NVIDIA RTX Power: Face Swap", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("NVIDIA RTX Power: Face Swap", 1280, 720)
-    
-    t_prev = time.time()
-    
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret: break
-
-        frame = cv2.flip(frame, 1)
-        faces = face_analyzer.get(frame)
-        
-        if faces:
-            main_face = sorted(faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)[0]
-            try:
-                frame = swapper.get(frame, main_face, target_identity, paste_back=True)
-            except:
-                pass
-
-        t_curr = time.time()
-        fps = 1/(t_curr - t_prev) if (t_curr - t_prev) > 0 else 0
-        t_prev = t_curr
-
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 0), (250, 60), COLOR_BG, -1)
-        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-        cv2.line(frame, (0, 60), (250, 60), COLOR_ACCENT, 2)
-        
-        cv2.putText(frame, f"RTX ON | FPS: {fps:.1f}", (20, 38), 
-                    cv2.FONT_HERSHEY_DUPLEX, 0.6, COLOR_ACCENT, 1, cv2.LINE_AA)
-
-        cv2.imshow("NVIDIA RTX Power: Face Swap", frame)
-        
-        if cv2.waitKey(1) & 0xFF in (27, ord('q')):
-            break
-
-    clean()
+                # Cálculo de Rendimiento (FPS)
+                c_time = time.time()
+                fps = 1.0 / (c_time - p_time) if (c_time - p_time) > 0 else 0
+                p_time = c_time
+                
+                # HUD Minimalista
+                cv2.putText(frame, f"RTX CORE: {int(fps)} FPS", (25, 45), 
+                            cv2.FONT_HERSHEY_DUPLEX, 0.7, (0, 215, 255), 1, cv2.LINE_AA)
+                
+                cv2.imshow("NVIDIA RTX Vision: Face Swap Core", frame)
+                if cv2.waitKey(1) & 0xFF in (ord('q'), 27): break
+        finally:
+            cap.release()
+            cv2.destroyAllWindows()
+            print("[INFO] Sistema desconectado de forma segura.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        app = RTXFaceSwap()
+        app.start()
+    except Exception as e:
+        print(f"\n[ERROR CRÍTICO]: {e}")
+        input("Presiona Enter para salir...")
