@@ -33,27 +33,26 @@ def get_emotion(shapes):
     return "Neutral 😐"
 
 def dibujar_interfaz(frame, txt_mano, txt_emocion):
-    """Dibuja un HUD tecnológico sofisticado en tonos dorados."""
+    """Dibuja un HUD tecnológico sofisticado en tonos dorados sin superposición."""
     h, w, _ = frame.shape
     # Overlay superior semi-transparente
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (w, 60), COLOR_HUD_BG, -1)
-    cv2.addWeighted(overlay, 0.8, frame, 0.2, 0, frame)
+    cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
     
-    # Doble línea decorativa dorada
+    # Líneas decorativas doradas
     cv2.line(frame, (0, 58), (w, 58), COLOR_ACCENT, 2)
-    cv2.line(frame, (0, 62), (w, 62), COLOR_ACCENT, 1)
 
-    # Info HUD
-    cv2.putText(frame, f"SISTEMA VISION IA", (25, 38), cv2.FONT_HERSHEY_DUPLEX, 0.6, COLOR_ACCENT, 1, cv2.LINE_AA)
+    # Info HUD - Extremo Izquierdo (Estado del Sistema)
+    cv2.putText(frame, f"SISTEMA VISION IA: ACTIVO", (20, 38), cv2.FONT_HERSHEY_DUPLEX, 0.5, COLOR_ACCENT, 1, cv2.LINE_AA)
     
-    # Info central (Gesto y Emoción)
-    txt_status = f"TRACKING: {txt_mano} | {txt_emocion}"
-    font_scale = 0.7
-    tw = cv2.getTextSize(txt_status, cv2.FONT_HERSHEY_DUPLEX, font_scale, 2)[0][0]
+    # Info central/derecha - (Resultados del Tracking)
+    txt_status = f"HANDS: {txt_mano} | {txt_emocion}"
+    font_scale = 0.6
+    tw = cv2.getTextSize(txt_status, cv2.FONT_HERSHEY_DUPLEX, font_scale, 1)[0][0]
     
-    # Brillo sutil bajo el texto
-    cv2.putText(frame, txt_status, ((w - tw)//2, 38), cv2.FONT_HERSHEY_DUPLEX, font_scale, COLOR_ACCENT, 1, cv2.LINE_AA)
+    # Ubicamos el texto a la derecha con un margen
+    cv2.putText(frame, txt_status, (w - tw - 20, 38), cv2.FONT_HERSHEY_DUPLEX, font_scale, COLOR_TEXTO, 1, cv2.LINE_AA)
 
 def main():
     print("Iniciando Vision Intelligence Suite...")
