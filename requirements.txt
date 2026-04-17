@@ -7,6 +7,13 @@ numpy>=1.24.0
 insightface>=0.7.3
 onnxruntime-gpu>=1.17.0
 
-# --- NVIDIA GPU Acceleration (Windows Fixes) ---
+# --- NVIDIA GPU Acceleration (Universal Fixes for Windows) ---
+# Instalamos soporte para ambos (11 y 12) para máxima compatibilidad
+nvidia-cudnn-cu11
+nvidia-cublas-cu11
+nvidia-cufft-cu11
+nvidia-curand-cu11
 nvidia-cudnn-cu12
 nvidia-cublas-cu12
+nvidia-cufft-cu12
+nvidia-curand-cu12
