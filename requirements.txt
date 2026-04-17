@@ -1,5 +1,12 @@
-opencv-contrib-python
-insightface
-onnxruntime-gpu
-mediapipe
-numpy
+# --- Core Vision ---
+opencv-python>=4.8.0
+mediapipe>=0.10.8
+numpy>=1.24.0
+
+# --- InsightFace & Face Swap ---
+insightface>=0.7.3
+onnxruntime-gpu>=1.17.0
+
+# --- NVIDIA GPU Acceleration (Windows Fixes) ---
+nvidia-cudnn-cu12
+nvidia-cublas-cu12
