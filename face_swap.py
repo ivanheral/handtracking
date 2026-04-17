@@ -7,106 +7,128 @@ import insightface
 from insightface.app import FaceAnalysis
 import numpy as np
 
+# Configuración Estética (Tech Gold)
+COLOR_TEXTO = (255, 255, 255)
+COLOR_ACCENT = (0, 215, 255) # Dorado
+COLOR_BG = (10, 10, 10)
+
 def main():
-    # El archivo de imagen objetivo y el modelo deben estar en la misma carpeta
+    print(f"{'='*50}")
+    print(" VISION INTELLIGENCE: FACE SWAP CORE v2.0 ")
+    print(" Optimizado para NVIDIA RTX (5070 Ti Ready) ")
+    print(f"{'='*50}")
+
     target_image_path = 'objetivo.jpg'
     model_path = 'inswapper_128.onnx'
     
     if not os.path.exists(target_image_path):
-        print(f"[ERROR] No se ha encontrado la imagen '{target_image_path}'.")
+        print(f"[ERROR] Imagen '{target_image_path}' no encontrada.")
         sys.exit(1)
         
     if not os.path.exists(model_path):
-        print(f"[ERROR] No se ha encontrado el modelo '{model_path}'.")
+        print(f"[ERROR] Modelo '{model_path}' no encontrado.")
         sys.exit(1)
 
-    print("Cargando los modelos de IA... Usando NVIDIA RTX GPU.")
-    
-    # Prioridad: TensorRT -> CUDA -> CPU
-    providers = ['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider']
+    # Configuración de aceleración de hardware NVIDIA
+    # TensorRT es la máxima optimización para la serie 50
+    providers = [
+        ('TensorrtExecutionProvider', {
+            'device_id': 0,
+            'trt_max_workspace_size': 2147483648, # 2GB
+            'trt_fp16_enable': True,
+        }),
+        ('CUDAExecutionProvider', {
+            'device_id': 0,
+            'arena_extend_strategy': 'kSameAsRequested',
+        }),
+        'CPUExecutionProvider'
+    ]
 
-    # 1. Analizador facial: Buffalo_L para mayor precisión
-    face_analyzer = FaceAnalysis(name='buffalo_l', providers=providers)
-    face_analyzer.prepare(ctx_id=0, det_size=(640, 640))
+    print("[IA] Cargando motores de inferencia en GPU...")
+    try:
+        # Analizador Buffalo_L: El más preciso de InsightFace
+        face_analyzer = FaceAnalysis(name='buffalo_l', providers=providers)
+        face_analyzer.prepare(ctx_id=0, det_size=(640, 640))
+        
+        # Modelo de intercambio generativo
+        swapper = insightface.model_zoo.get_model(model_path, providers=providers)
+    except Exception as e:
+        print(f"[ERROR] Error al inicializar GPU: {e}")
+        print("Asegúrate de tener instalados CUDA y cuDNN.")
+        return
 
-    # 2. Motor generativo InSwapper
-    swapper = insightface.model_zoo.get_model(model_path, providers=providers)
-
-    # 3. Extraer Embedding de la cara objetivo
-    print(f"Analizando cara de: {target_image_path}...")
+    # Proceso de identidad objetivo
+    print(f"[IA] Sincronizando identidad: {target_image_path}...")
     target_img = cv2.imread(target_image_path)
     target_faces = face_analyzer.get(target_img)
     
-    if len(target_faces) == 0:
-        print("[ERROR] No se detectó ninguna cara en 'objetivo.jpg'. Asegúrate de que la cara sea visible.")
+    if not target_faces:
+        print("[ERROR] No se detectó rostro en la imagen objetivo.")
         sys.exit(1)
-        
-    target_identity = target_faces[0]
+    
+    # Usamos la cara con mayor resolución/tamaño
+    target_identity = sorted(target_faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)[0]
+    print("[IA] Identidad inyectada con éxito.")
 
-    # 4. Iniciar Webcam con reintento
+    # Captura de vídeo
     cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("[AVISO] Intentando abrir la cámara de nuevo...")
-        time.sleep(1)
-        cap = cv2.VideoCapture(0)
-        
-    if not cap.isOpened():
-        print("[ERROR] No se pudo acceder a la webcam.")
-        sys.exit(1)
-
-    def cleanup(sig, frame):
-        if cap.isOpened(): cap.release()
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    
+    def clean(*_): 
+        cap.release()
         cv2.destroyAllWindows()
-        print("\n[INFO] Aplicación cerrada correctamente.")
+        print("\n[INFO] Desconectando redes neuronales. Sistema OFF.")
         sys.exit(0)
 
-    # Capturar señales de cierre
-    signal.signal(signal.SIGINT, cleanup)
+    # Compatibilidad de señales Windows/Unix
+    signals = [signal.SIGINT]
+    if hasattr(signal, "SIGTSTP"): signals.append(signal.SIGTSTP)
+    for sig in signals: signal.signal(sig, clean)
 
-    cv2.namedWindow("Poder NVIDIA: Face Swap", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Poder NVIDIA: Face Swap", 1024, 768)
+    cv2.namedWindow("NVIDIA RTX Power: Face Swap", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("NVIDIA RTX Power: Face Swap", 1280, 720)
     
-    print("¡Sistema listo! Presiona 'Q' en la ventana para salir.")
-
     t_prev = time.time()
     
-    while True:
+    while cap.isOpened():
         ret, frame = cap.read()
         if not ret: break
 
         frame = cv2.flip(frame, 1)
-
-        # Buscar caras en el frame actual
-        my_faces = face_analyzer.get(frame)
         
-        if my_faces:
-            # Ordenar por tamaño de caja (procesar solo la cara más grande/cercana)
-            my_faces.sort(key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)
-            
+        # Detección facial en tiempo real
+        faces = face_analyzer.get(frame)
+        
+        if faces:
+            # Procesamos la cara más prominente
+            main_face = sorted(faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)[0]
             try:
-                # Aplicar el Swap sobre la cara real
-                frame = swapper.get(frame, my_faces[0], target_identity, paste_back=True)
-            except Exception as e:
-                # Silenciar errores menores de inferencia
+                # El "Swap" ocurre aquí mediante inferencia TensorRT/CUDA
+                frame = swapper.get(frame, main_face, target_identity, paste_back=True)
+            except:
                 pass
-        
-        # Calcular FPS
+
+        # HUD Estético
         t_curr = time.time()
-        fps = 1/(t_curr-t_prev) if t_curr - t_prev > 0 else 0
+        fps = 1/(t_curr - t_prev) if (t_curr - t_prev) > 0 else 0
         t_prev = t_curr
+
+        # HUD Background
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (250, 60), COLOR_BG, -1)
+        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        cv2.line(frame, (0, 60), (250, 60), COLOR_ACCENT, 2)
         
-        # Overlay estético
-        cv2.rectangle(frame, (10, 10), (280, 70), (0, 0, 0), -1)
-        cv2.putText(frame, f"FPS: {fps:.1f}", (20, 50), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 127), 2)
+        cv2.putText(frame, f"RTX ON | FPS: {fps:.1f}", (20, 38), 
+                    cv2.FONT_HERSHEY_DUPLEX, 0.6, COLOR_ACCENT, 1, cv2.LINE_AA)
+
+        cv2.imshow("NVIDIA RTX Power: Face Swap", frame)
         
-        cv2.imshow("Poder NVIDIA: Face Swap", frame)
-        
-        # Tecla de salida
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF in (27, ord('q')):
             break
 
-    cleanup(None, None)
+    clean()
 
 if __name__ == "__main__":
     main()
