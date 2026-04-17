@@ -19,17 +19,17 @@ def get_hand_status(m):
     """Detecta el número de dedos levantados o el gesto de corazón."""
     f = [d_sq(m, 4, 17) > d_sq(m, 2, 17)] + [d_sq(m, t, 0) > d_sq(m, p, 0) for t, p in [(8, 6), (12, 10), (16, 14), (20, 18)]]
     if f[2:] == [0, 0, 0] and d_sq(m, 4, 8) < d_sq(m, 5, 9) * 4: 
-        return "Corazón ❤️"
+        return "CORAZON"
     return str(sum(f))
 
 def get_emotion(shapes):
     """Clasifica la emoción basada en blendshapes."""
     s = {b.category_name: b.score for b in shapes}
-    if s.get('mouthSmileLeft', 0) > 0.4 and s.get('mouthSmileRight', 0) > 0.4: return "Feliz 😊"
-    if s.get('jawOpen', 0) > 0.4: return "Sorprendido 😲"
-    if s.get('browInnerUp', 0) > 0.3 and s.get('mouthFrownLeft', 0) > 0.3: return "Triste 😢"
-    if s.get('eyeBlinkLeft', 0) > 0.5 and s.get('eyeBlinkRight', 0) > 0.5: return "Ojos cerrados 😴"
-    return "Neutral 😐"
+    if s.get('mouthSmileLeft', 0) > 0.4 and s.get('mouthSmileRight', 0) > 0.4: return "FELIZ"
+    if s.get('jawOpen', 0) > 0.4: return "SORPRENDIDO"
+    if s.get('browInnerUp', 0) > 0.3 and s.get('mouthFrownLeft', 0) > 0.3: return "TRISTE"
+    if s.get('eyeBlinkLeft', 0) > 0.5 and s.get('eyeBlinkRight', 0) > 0.5: return "CERRADOS"
+    return "NEUTRAL"
 
 def dibujar_interfaz(frame, txt_mano, txt_emocion):
     """Dibuja un HUD tecnológico sofisticado en tonos dorados sin superposición."""
