@@ -64,12 +64,15 @@ def main():
 
     # Configuración de aceleración de hardware NVIDIA
     # Eliminamos TensorRT para evitar conflictos de DLLs y usamos CUDA 100% puro.
+    # Ajustes específicos para evitar CUDNN_BACKEND_API_FAILED en GPUs Serie 50.
     providers = [
         ('CUDAExecutionProvider', {
             'device_id': 0,
             'arena_extend_strategy': 'kSameAsRequested',
-            'cudnn_conv_algo_search': 'HEURISTIC', # Evita errores de ejecución en algunas GPUs
-            'use_tf32': 0,                        # Desactivar TF32 para mayor estabilidad
+            'cudnn_conv_algo_search': 'DEFAULT',   # Menos agresivo que HEURISTIC/EXHAUSTIVE
+            'cuda_mem_limit': 4 * 1024 * 1024 * 1024, # Limitar a 4GB para evitar fragmentación
+            'cudnn_conv_use_max_workspace': '0',   # No forzar el uso máximo de memoria
+            'use_tf32': 0,
         }),
         'CPUExecutionProvider'
     ]
