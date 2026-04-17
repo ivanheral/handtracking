@@ -74,7 +74,10 @@ def main():
         print("\nCámaras liberadas. Hasta pronto.")
         sys.exit(0)
 
-    for sig in (signal.SIGINT, signal.SIGTSTP): signal.signal(sig, clean)
+    # Configuración de señales para salida limpia (Compatibilidad Windows/Linux)
+    signals = [signal.SIGINT]
+    if hasattr(signal, "SIGTSTP"): signals.append(signal.SIGTSTP) # Solo en Unix
+    for sig in signals: signal.signal(sig, clean)
 
     cv2.namedWindow("Vision Intelligence Suite", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Vision Intelligence Suite", 1280, 720)
