@@ -26,8 +26,23 @@ def main():
         sys.exit(1)
         
     if not os.path.exists(model_path):
-        print(f"[ERROR] Modelo '{model_path}' no encontrado.")
-        sys.exit(1)
+        print(f"[AVISO] Modelo '{model_path}' no encontrado.")
+        print("[IA] Iniciando descarga automática desde Hugging Face (aprox. 554MB)...")
+        print("[IA] Esto solo ocurrirá una vez. Por favor, espera...")
+        import urllib.request
+        url = "https://huggingface.co/ezioruan/inswapper_128.onnx/resolve/main/inswapper_128.onnx"
+        try:
+            def progress(block_num, block_size, total_size):
+                if total_size > 0:
+                    percent = (block_num * block_size * 100) / total_size
+                    sys.stdout.write(f"\r[IA] Progreso de descarga: {percent:.1f}%")
+                    sys.stdout.flush()
+            urllib.request.urlretrieve(url, model_path, progress)
+            print("\n[OK] Modelo descargado y listo.")
+        except Exception as e:
+            print(f"\n[ERROR] No se pudo descargar el modelo: {e}")
+            print("Cópialo manualmente a la carpeta del proyecto para continuar.")
+            sys.exit(1)
 
     # Configuración de aceleración de hardware NVIDIA
     # TensorRT es la máxima optimización para la serie 50
