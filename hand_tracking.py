@@ -6,12 +6,12 @@ import mediapipe as mp
 from mediapipe.tasks.python import vision, BaseOptions
 import numpy as np
 
-# Paleta de colores Premium (Cyberpunk/Tech)
+# Paleta de colores Premium (Tech Gold)
 COLOR_HAND_NODOS = (0, 255, 127)      # Esmeralda
-COLOR_FACE_TESSELATION = (255, 255, 255) # Blanco (sutil)
+COLOR_FACE_TESSELATION = (200, 200, 200) # Gris claro
 COLOR_TEXTO = (255, 255, 255)
-COLOR_HUD_BG = (20, 20, 20)          # Casi negro
-COLOR_ACCENT = (180, 105, 255)       # Neón Púrpura
+COLOR_HUD_BG = (10, 10, 10)          # Casi negro
+COLOR_ACCENT = (0, 215, 255)         # Amarillo Oro / Dorado (BGR)
 
 def d_sq(m, p1, p2): 
     return (m[p1].x - m[p2].x)**2 + (m[p1].y - m[p2].y)**2
@@ -32,26 +32,28 @@ def get_emotion(shapes):
     if s.get('eyeBlinkLeft', 0) > 0.5 and s.get('eyeBlinkRight', 0) > 0.5: return "Ojos cerrados 😴"
     return "Neutral 😐"
 
-def dibujar_interfaz(frame, txt_mano, txt_emocion, fps):
-    """Dibuja un HUD tecnológico sofisticado."""
+def dibujar_interfaz(frame, txt_mano, txt_emocion):
+    """Dibuja un HUD tecnológico sofisticado en tonos dorados."""
     h, w, _ = frame.shape
     # Overlay superior semi-transparente
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (w, 60), COLOR_HUD_BG, -1)
-    cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+    cv2.addWeighted(overlay, 0.8, frame, 0.2, 0, frame)
     
-    # Línea decorativa neón
-    cv2.line(frame, (0, 60), (w, 60), COLOR_ACCENT, 2)
+    # Doble línea decorativa dorada
+    cv2.line(frame, (0, 58), (w, 58), COLOR_ACCENT, 2)
+    cv2.line(frame, (0, 62), (w, 62), COLOR_ACCENT, 1)
 
     # Info HUD
-    cv2.putText(frame, f"SISTEMA IA: ACTIVO", (20, 35), cv2.FONT_HERSHEY_DUPLEX, 0.6, COLOR_ACCENT, 1)
-    cv2.putText(frame, f"FPS: {fps}", (w - 120, 35), cv2.FONT_HERSHEY_DUPLEX, 0.6, COLOR_TEXTO, 1)
+    cv2.putText(frame, f"SISTEMA VISION IA", (25, 38), cv2.FONT_HERSHEY_DUPLEX, 0.6, COLOR_ACCENT, 1, cv2.LINE_AA)
     
     # Info central (Gesto y Emoción)
-    txt_status = f"MANOS: {txt_mano} | EMOCIÓN: {txt_emocion}"
+    txt_status = f"TRACKING: {txt_mano} | {txt_emocion}"
     font_scale = 0.7
-    tw = cv2.getTextSize(txt_status, cv2.FONT_HERSHEY_DUPLEX, font_scale, 1)[0][0]
-    cv2.putText(frame, txt_status, ((w - tw)//2, 35), cv2.FONT_HERSHEY_DUPLEX, font_scale, COLOR_TEXTO, 1)
+    tw = cv2.getTextSize(txt_status, cv2.FONT_HERSHEY_DUPLEX, font_scale, 2)[0][0]
+    
+    # Brillo sutil bajo el texto
+    cv2.putText(frame, txt_status, ((w - tw)//2, 38), cv2.FONT_HERSHEY_DUPLEX, font_scale, COLOR_ACCENT, 1, cv2.LINE_AA)
 
 def main():
     print("Iniciando Vision Intelligence Suite...")
@@ -123,17 +125,12 @@ def main():
         # Dibujar Face Landmarks (Teselación minimalista)
         for f_marks in (f_res.face_landmarks or []):
             for i, c in enumerate(vision.FaceLandmarksConnections.FACE_LANDMARKS_TESSELATION):
-                if i % 4 == 0: # Dibujar solo una parte para no saturar la imagen
+                if i % 5 == 0: 
                     p1, p2 = f_marks[c.start], f_marks[c.end]
-                    cv2.line(frame, (int(p1.x*w), int(p1.y*h)), (int(p2.x*w), int(p2.y*h)), COLOR_FACE_TESSELATION, 1, cv2.LINE_AA)
-
-        # Cálculo de FPS
-        t_curr = time.time()
-        fps = int(1 / (t_curr - t_prev)) if (t_curr - t_prev) > 0 else 0
-        t_prev = t_curr
+                    cv2.line(frame, (int(p1.x*w), int(p1.y*h)), (int(p2.x*w), int(p2.y*h)), (150, 150, 150), 1, cv2.LINE_AA)
 
         # Interfaz
-        dibujar_interfaz(frame, mano_txt, emocion_txt, fps)
+        dibujar_interfaz(frame, mano_txt, emocion_txt)
 
         cv2.imshow("Vision Intelligence Suite", frame)
         if cv2.waitKey(1) & 0xFF in (27, ord('q')): break
