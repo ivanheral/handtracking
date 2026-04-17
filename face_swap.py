@@ -62,28 +62,32 @@ def main():
             print(f"\n[ERROR] No se pudo descargar el modelo: {e}")
             sys.exit(1)
 
-    # Configuración de aceleración de hardware NVIDIA
-    # Eliminamos TensorRT para evitar conflictos de DLLs y usamos CUDA 100% puro.
-    # Ajustes específicos para evitar CUDNN_BACKEND_API_FAILED en GPUs Serie 50.
-    providers = [
+    # Configuración de motores en Modo Híbrido (Estabilidad + Velocidad)
+    # 1. Detección (Analyzer): Usamos CPU para evitar los errores de cuDNN de la Serie 50.
+    #    La detección es ligera y no ralentizará el sistema en una CPU moderna.
+    providers_cpu = ['CPUExecutionProvider']
+    
+    # 2. Intercambio (Swapper): Usamos CUDA 100% puro. El pesado.
+    providers_gpu = [
         ('CUDAExecutionProvider', {
             'device_id': 0,
             'arena_extend_strategy': 'kSameAsRequested',
-            'cudnn_conv_algo_search': 'DEFAULT',   # Menos agresivo que HEURISTIC/EXHAUSTIVE
-            'cuda_mem_limit': 4 * 1024 * 1024 * 1024, # Limitar a 4GB para evitar fragmentación
-            'cudnn_conv_use_max_workspace': '0',   # No forzar el uso máximo de memoria
-            'use_tf32': 0,
+            'cudnn_conv_algo_search': 'DEFAULT',
         }),
         'CPUExecutionProvider'
     ]
 
-    print("[IA] Cargando motores de inferencia en GPU (CUDA Only)...")
+    print("[IA] Cargando motores en modo HÍBRIDO (Detección: CPU | Swap: GPU)...")
     try:
-        face_analyzer = FaceAnalysis(name='buffalo_l', providers=providers)
+        # Analizador en CPU para evitar el error 'CUDNN_BACKEND_API_FAILED'
+        face_analyzer = FaceAnalysis(name='buffalo_l', providers=providers_cpu)
         face_analyzer.prepare(ctx_id=0, det_size=(640, 640))
-        swapper = insightface.model_zoo.get_model(model_path, providers=providers)
+        
+        # Swapper en GPU para máxima fluidez de 60 FPS
+        swapper = insightface.model_zoo.get_model(model_path, providers=providers_gpu)
+        print("[IA] Motores sincronizados. RTX activado para el generador.")
     except Exception as e:
-        print(f"[ERROR] Error al inicializar GPU: {e}")
+        print(f"[ERROR] Error al inicializar híbrido: {e}")
         return
 
     # Proceso de identidad objetivo
