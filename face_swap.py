@@ -7,6 +7,26 @@ import insightface
 from insightface.app import FaceAnalysis
 import numpy as np
 
+# Parche de compatibilidad para NVIDIA en Windows (Soluciona DLLs faltantes)
+if os.name == 'nt':
+    import site
+    possible_paths = []
+    # Buscar en el sitio de paquetes del usuario y del venv
+    for s in [site.getusersitepackages()] + site.getsitepackages():
+        nvidia_base = os.path.join(s, 'nvidia')
+        if os.path.exists(nvidia_base):
+            for folder in ['cublas/bin', 'cudnn/bin', 'curand/bin', 'cufft/bin']:
+                full_path = os.path.join(nvidia_base, folder)
+                if os.path.exists(full_path):
+                    possible_paths.append(full_path)
+    
+    if possible_paths:
+        os.environ['PATH'] = os.pathsep.join(possible_paths) + os.pathsep + os.environ['PATH']
+        # Para versiones modernas de Python en Windows, necesitamos add_dll_directory
+        for path in possible_paths:
+            try: os.add_dll_directory(path)
+            except: pass
+
 # Configuración Estética (Tech Gold)
 COLOR_TEXTO = (255, 255, 255)
 COLOR_ACCENT = (0, 215, 255) # Dorado
