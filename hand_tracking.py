@@ -7,8 +7,7 @@ from mediapipe.tasks.python import vision, BaseOptions
 import numpy as np
 
 # Paleta de colores Premium (Tech Gold)
-COLOR_HAND_NODOS = (0, 255, 127)      # Esmeralda
-COLOR_FACE_TESSELATION = (200, 200, 200) # Gris claro
+COLOR_MALLA = (180, 180, 180)        # Gris técnico (para nodos y líneas)
 COLOR_TEXTO = (255, 255, 255)
 COLOR_HUD_BG = (10, 10, 10)          # Casi negro
 COLOR_ACCENT = (0, 215, 255)         # Amarillo Oro / Dorado (BGR)
@@ -107,26 +106,26 @@ def main():
         mano_txt = get_hand_status(h_res.hand_landmarks[0]) if h_res.hand_landmarks else "-"
         emocion_txt = get_emotion(f_res.face_blendshapes[0]) if f_res.face_blendshapes else "Neutral"
 
-        # Dibujar Hand Landmarks (Con mayor grosor y brillo)
+        # Dibujar Hand Landmarks (Estética minimalista como el rostro)
         if h_res.hand_landmarks:
             for marks in h_res.hand_landmarks:
                 # Dibujar conexiones
                 for c in vision.HandLandmarksConnections.HAND_CONNECTIONS:
                     p1, p2 = marks[c.start], marks[c.end]
-                    cv2.line(frame, (int(p1.x*w), int(p1.y*h)), (int(p2.x*w), int(p2.y*h)), (180, 105, 255), 2, cv2.LINE_AA)
-                # Dibujar nodos
+                    cv2.line(frame, (int(p1.x*w), int(p1.y*h)), (int(p2.x*w), int(p2.y*h)), COLOR_MALLA, 1, cv2.LINE_AA)
+                # Dibujar nodos sutiles
                 for point in marks: 
-                    # Nodos con borde para que resalten
-                    pos = (int(point.x*w), int(point.y*h))
-                    cv2.circle(frame, pos, 5, (0, 255, 0), -1, cv2.LINE_AA)
-                    cv2.circle(frame, pos, 6, (255, 255, 255), 1, cv2.LINE_AA)
+                    cv2.circle(frame, (int(point.x*w), int(point.y*h)), 2, COLOR_MALLA, -1, cv2.LINE_AA)
 
-        # Dibujar Face Landmarks (Teselación minimalista)
+        # Dibujar Face Landmarks (Misma estética que las manos)
         for f_marks in (f_res.face_landmarks or []):
             for i, c in enumerate(vision.FaceLandmarksConnections.FACE_LANDMARKS_TESSELATION):
-                if i % 5 == 0: 
+                if i % 5 == 0: # Densidad controlada
                     p1, p2 = f_marks[c.start], f_marks[c.end]
-                    cv2.line(frame, (int(p1.x*w), int(p1.y*h)), (int(p2.x*w), int(p2.y*h)), (150, 150, 150), 1, cv2.LINE_AA)
+                    cv2.line(frame, (int(p1.x*w), int(p1.y*h)), (int(p2.x*w), int(p2.y*h)), COLOR_MALLA, 1, cv2.LINE_AA)
+            for point in f_marks:
+                if np.random.rand() > 0.95: # Dibujar solo algunos puntos para no saturar
+                    cv2.circle(frame, (int(point.x*w), int(point.y*h)), 1, COLOR_MALLA, -1, cv2.LINE_AA)
 
         # Interfaz
         dibujar_interfaz(frame, mano_txt, emocion_txt)
