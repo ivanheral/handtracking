@@ -117,15 +117,23 @@ def main():
                 for point in marks: 
                     cv2.circle(frame, (int(point.x*w), int(point.y*h)), 2, COLOR_MALLA, -1, cv2.LINE_AA)
 
-        # Dibujar Face Landmarks (Misma estética que las manos)
+        # Dibujar Face Landmarks (Mejora: Nodos en contornos clave)
         for f_marks in (f_res.face_landmarks or []):
+            # Dibujar Teselación (Líneas)
             for i, c in enumerate(vision.FaceLandmarksConnections.FACE_LANDMARKS_TESSELATION):
-                if i % 5 == 0: # Densidad controlada
+                if i % 5 == 0: 
                     p1, p2 = f_marks[c.start], f_marks[c.end]
                     cv2.line(frame, (int(p1.x*w), int(p1.y*h)), (int(p2.x*w), int(p2.y*h)), COLOR_MALLA, 1, cv2.LINE_AA)
-            for point in f_marks:
-                if np.random.rand() > 0.95: # Dibujar solo algunos puntos para no saturar
-                    cv2.circle(frame, (int(point.x*w), int(point.y*h)), 1, COLOR_MALLA, -1, cv2.LINE_AA)
+            
+            # Dibujar Nodos en puntos clave (Contornos de ojos, cejas y labios)
+            puntos_clave = []
+            for conn in [vision.FaceLandmarksConnections.FACE_LANDMARKS_CONTOURS]:
+                for c in conn:
+                    puntos_clave.extend([c.start, c.end])
+            
+            for idx in set(puntos_clave):
+                p = f_marks[idx]
+                cv2.circle(frame, (int(p.x*w), int(p.y*h)), 1, COLOR_MALLA, -1, cv2.LINE_AA)
 
         # Interfaz
         dibujar_interfaz(frame, mano_txt, emocion_txt)
