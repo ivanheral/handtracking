@@ -60,7 +60,13 @@ def main():
     try:
         # Inicialización de detectores
         h_det = vision.HandLandmarker.create_from_options(vision.HandLandmarkerOptions(
-            base_options=Base('hand_landmarker.task'), running_mode=Run, num_hands=2))
+            base_options=Base('hand_landmarker.task'),
+            running_mode=Run,
+            num_hands=2,
+            min_hand_detection_confidence=0.3, # Más sensible
+            min_hand_presence_confidence=0.3,
+            min_tracking_confidence=0.3
+        ))
         f_det = vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
             base_options=Base('face_landmarker.task'), running_mode=Run, num_faces=1, output_face_blendshapes=True))
     except Exception as e:
@@ -94,21 +100,25 @@ def main():
         # Inferencia
         h_res, f_res = h_det.detect_for_video(mp_img, ts), f_det.detect_for_video(mp_img, ts)
         
-        # Efecto visual: Desaturar ligeramente para enfoque técnico
-        frame = cv2.addWeighted(frame, 0.5, cv2.cvtColor(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR), 0.5, 0)
-        
+        # Eliminado efecto gris para máxima visibilidad de los nodos
         h, w = frame.shape[:2]
         
         mano_txt = get_hand_status(h_res.hand_landmarks[0]) if h_res.hand_landmarks else "-"
         emocion_txt = get_emotion(f_res.face_blendshapes[0]) if f_res.face_blendshapes else "Neutral"
 
-        # Dibujar Hand Landmarks
-        for marks in (h_res.hand_landmarks or []):
-            for c in vision.HandLandmarksConnections.HAND_CONNECTIONS:
-                p1, p2 = marks[c.start], marks[c.end]
-                cv2.line(frame, (int(p1.x*w), int(p1.y*h)), (int(p2.x*w), int(p2.y*h)), COLOR_ACCENT, 1, cv2.LINE_AA)
-            for point in marks: 
-                cv2.circle(frame, (int(point.x*w), int(point.y*h)), 4, COLOR_HAND_NODOS, -1, cv2.LINE_AA)
+        # Dibujar Hand Landmarks (Con mayor grosor y brillo)
+        if h_res.hand_landmarks:
+            for marks in h_res.hand_landmarks:
+                # Dibujar conexiones
+                for c in vision.HandLandmarksConnections.HAND_CONNECTIONS:
+                    p1, p2 = marks[c.start], marks[c.end]
+                    cv2.line(frame, (int(p1.x*w), int(p1.y*h)), (int(p2.x*w), int(p2.y*h)), (180, 105, 255), 2, cv2.LINE_AA)
+                # Dibujar nodos
+                for point in marks: 
+                    # Nodos con borde para que resalten
+                    pos = (int(point.x*w), int(point.y*h))
+                    cv2.circle(frame, pos, 5, (0, 255, 0), -1, cv2.LINE_AA)
+                    cv2.circle(frame, pos, 6, (255, 255, 255), 1, cv2.LINE_AA)
 
         # Dibujar Face Landmarks (Teselación minimalista)
         for f_marks in (f_res.face_landmarks or []):
