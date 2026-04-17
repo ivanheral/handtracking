@@ -9,10 +9,12 @@ onnxruntime-gpu>=1.17.0
 
 # --- NVIDIA GPU Acceleration (Universal Fixes for Windows) ---
 # Instalamos soporte para ambos (11 y 12) para máxima compatibilidad
+nvidia-cuda-runtime-cu11
 nvidia-cudnn-cu11
 nvidia-cublas-cu11
 nvidia-cufft-cu11
 nvidia-curand-cu11
+nvidia-cuda-runtime-cu12
 nvidia-cudnn-cu12
 nvidia-cublas-cu12
 nvidia-cufft-cu12

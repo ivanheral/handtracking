@@ -15,7 +15,7 @@ if os.name == 'nt':
     for s in [site.getusersitepackages()] + site.getsitepackages():
         nvidia_base = os.path.join(s, 'nvidia')
         if os.path.exists(nvidia_base):
-            for folder in ['cublas/bin', 'cudnn/bin', 'curand/bin', 'cufft/bin']:
+            for folder in ['cuda_runtime/bin', 'cublas/bin', 'cudnn/bin', 'curand/bin', 'cufft/bin']:
                 full_path = os.path.join(nvidia_base, folder)
                 if os.path.exists(full_path):
                     possible_paths.append(full_path)
